@@ -1,4 +1,4 @@
-// index.js - Telegram Quiz Botu (Spam Engeline Takılmayan Sürüm)
+// index.js - Telegram Quiz Botu (Süreli Sürüm)
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
@@ -80,7 +80,7 @@ bot.on('callback_query', async (callbackQuery) => {
         aktifTest = soruBankasi[uniteAdi][testAdi];
         aktifSoruIndex = 0;
 
-        bot.editMessageText(`✅ **${uniteAdi} - ${testAdi}** başlıyor! Sorular arka arkaya geliyor...`, {
+        bot.editMessageText(`✅ **${uniteAdi} - ${testAdi}** başlıyor! Sorular 20 saniye süreyle arka arkaya geliyor...`, {
             chat_id: chatId,
             message_id: messageId
         });
@@ -100,30 +100,35 @@ async function sorulariGonder(chatId) {
     for (let i = 0; i < aktifTest.length; i++) {
         const soru = aktifTest[i];
 
+        // Telegram 300 karakterden fazlasını kabul etmiyor. Soruyu kısaltıyoruz.
+        let soruMetni = `Soru ${i + 1}: ${soru.question}`;
+        if (soruMetni.length > 295) {
+            soruMetni = soruMetni.substring(0, 295) + "...";
+        }
+
         try {
             // Telegram anket formatına çeviriyoruz
             await bot.sendPoll(chatId, 
-                `Soru ${i + 1}: ${soru.question}`, // Soru başlığı
-                soru.options,                      // Şıklar (A, B, C, D)
+                soruMetni,                      // Kısaltılmış soru başlığı
+                soru.options,                   // Şıklar
                 {
-                    type: 'quiz',                  // Tip: Quiz (Sınav) - En önemlisi bu!
-                    correct_option_id: soru.correct, // Doğru cevabın indeksi (0 = A, 1 = B)
-                    is_anonymous: false,           // Kimin ne seçtiği görünsün (avatar için)
-                    explanation: `Doğru cevap: ${soru.options[soru.correct]}` // Açıklama
+                    type: 'quiz',                  // Tip: Quiz (Sınav)
+                    correct_option_id: soru.correct, // Doğru cevabın indeksi
+                    is_anonymous: false,           // Kimin ne seçtiği görünsün
+                    open_period: 20,               // 🚨 YENİ: Anket 20 saniye açık kalacak!
+                    explanation: `Doğru cevap: ${soru.options[soru.correct]}` 
                 }
             );
 
-            // 🚨 ÖNEMLİ: Telegram spam engeline takılmamak için 2.5 saniye bekle
-            await new Promise(resolve => setTimeout(resolve, 2500)); 
+            // Bir sonraki soruya geçmeden önce 22 saniye bekle (20 saniye oylama + 2 saniye sonuçları görme)
+            await new Promise(resolve => setTimeout(resolve, 22000)); 
             
         } catch (error) {
             console.error(`Soru ${i + 1} gönderilirken hata oluştu:`, error.message);
-            // Eğer hata alırsak biraz daha uzun bekleyip devam edelim
             await new Promise(resolve => setTimeout(resolve, 5000));
         }
     }
 
-    // Tüm sorular gönderildikten sonra testi sıfırla
     aktifTest = null;
     aktifSoruIndex = 0;
     bot.sendMessage(chatId, "✅ **Tüm sorular gönderildi!** Telegram üzerindeki sonuçları görebilirsiniz.");
