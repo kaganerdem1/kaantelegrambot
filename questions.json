@@ -1,0 +1,12 @@
+[
+  {
+    "question": "Osmanlı Devleti'nin kurucusu kimdir?",
+    "options": ["Osman Bey", "Orhan Bey", "I. Murat", "Yıldırım Bayezid"],
+    "correct": 0
+  },
+  {
+    "question": "İstanbul hangi yıl fethedilmiştir?",
+    "options": ["1071", "1453", "1492", "1517"],
+    "correct": 1
+  }
+]
