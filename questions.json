@@ -1,12 +1,16 @@
-[
-  {
-    "question": "Osmanlı Devleti'nin kurucusu kimdir?",
-    "options": ["Osman Bey", "Orhan Bey", "I. Murat", "Yıldırım Bayezid"],
-    "correct": 0
+{
+  "Ünite 1: Osmanlı Kuruluş": {
+    "Test 1": [
+      { "question": "Osmanlı Devleti'nin kurucusu kimdir?", "options": ["Osman Bey", "Orhan Bey", "I. Murat", "Yıldırım Bayezid"], "correct": 0 },
+      { "question": "İlk Osmanlı parası hangi padişah döneminde basılmıştır?", "options": ["Osman Bey", "Orhan Bey", "I. Murat", "Yıldırım Bayezid"], "correct": 1 }
+    ],
+    "Test 2": [
+      { "question": "Osmanlı Devleti'nin ilk başkenti neresidir?", "options": ["İstanbul", "Bursa", "Söğüt", "Edirne"], "correct": 2 }
+    ]
   },
-  {
-    "question": "İstanbul hangi yıl fethedilmiştir?",
-    "options": ["1071", "1453", "1492", "1517"],
-    "correct": 1
+  "Ünite 2: İstanbul'un Fethi": {
+    "Test 1": [
+      { "question": "İstanbul hangi yıl fethedilmiştir?", "options": ["1071", "1453", "1492", "1517"], "correct": 1 }
+    ]
   }
-]
+}
