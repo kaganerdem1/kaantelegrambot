@@ -1,3 +1,4 @@
+// index.js - Telegram Quiz Botu (Spam Engeline Takılmayan Sürüm)
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
@@ -18,8 +19,9 @@ const bot = new TelegramBot(token, { polling: true });
 let soruBankasi = {};
 try {
     soruBankasi = JSON.parse(fs.readFileSync('questions.json', 'utf8'));
+    console.log("✅ Soru bankası başarıyla yüklendi.");
 } catch (err) {
-    console.log("Hata: questions.json bulunamadı!");
+    console.log("❌ Hata: questions.json bulunamadı veya formatı bozuk!");
 }
 
 // --- Aktif Test Değişkenleri ---
@@ -31,7 +33,7 @@ bot.onText(/\/sor/, (msg) => {
     if (msg.chat.id.toString() !== groupId.toString()) return;
 
     const uniteler = Object.keys(soruBankasi);
-    if (uniteler.length === 0) return bot.sendMessage(groupId, "❌ Soru bankası boş.");
+    if (uniteler.length === 0) return bot.sendMessage(groupId, "❌ Soru bankası boş veya yüklenemedi.");
 
     const butonlar = uniteler.map((unite, index) => {
         return [{ text: unite, callback_data: `unite_${index}` }];
@@ -90,27 +92,35 @@ bot.on('callback_query', async (callbackQuery) => {
 // --- Telegram Quiz (Anket) Formatında Soru Gönderme ---
 async function sorulariGonder(chatId) {
     if (!aktifTest || aktifSoruIndex >= aktifTest.length) {
-        return bot.sendMessage(chatId, "🎉 **Test bitti!** Başka bir test için /sor yazabilirsin.");
+        bot.sendMessage(chatId, "🎉 **Test bitti!** Başka bir test için /sor yazabilirsin.");
+        return;
     }
 
     // Testteki her soru için Telegram Anketi oluştur
     for (let i = 0; i < aktifTest.length; i++) {
         const soru = aktifTest[i];
 
-        // Telegram anket formatına çeviriyoruz
-        await bot.sendPoll(chatId, 
-            `Soru ${i + 1}: ${soru.question}`, // Soru başlığı
-            soru.options,                      // Şıklar (A, B, C, D)
-            {
-                type: 'quiz',                  // Tip: Quiz (Sınav) - En önemlisi bu!
-                correct_option_id: soru.correct, // Doğru cevabın indeksi (0 = A, 1 = B)
-                is_anonymous: false,           // Kimin ne seçtiği görünsün (avatar için)
-                explanation: `Doğru cevap: ${soru.options[soru.correct]}` // Açıklama (opsiyonel)
-            }
-        );
+        try {
+            // Telegram anket formatına çeviriyoruz
+            await bot.sendPoll(chatId, 
+                `Soru ${i + 1}: ${soru.question}`, // Soru başlığı
+                soru.options,                      // Şıklar (A, B, C, D)
+                {
+                    type: 'quiz',                  // Tip: Quiz (Sınav) - En önemlisi bu!
+                    correct_option_id: soru.correct, // Doğru cevabın indeksi (0 = A, 1 = B)
+                    is_anonymous: false,           // Kimin ne seçtiği görünsün (avatar için)
+                    explanation: `Doğru cevap: ${soru.options[soru.correct]}` // Açıklama
+                }
+            );
 
-        // Sorular arasında 2 saniye bekle (Telegram spam koruması)
-        await new Promise(resolve => setTimeout(resolve, 2000));
+            // 🚨 ÖNEMLİ: Telegram spam engeline takılmamak için 2.5 saniye bekle
+            await new Promise(resolve => setTimeout(resolve, 2500)); 
+            
+        } catch (error) {
+            console.error(`Soru ${i + 1} gönderilirken hata oluştu:`, error.message);
+            // Eğer hata alırsak biraz daha uzun bekleyip devam edelim
+            await new Promise(resolve => setTimeout(resolve, 5000));
+        }
     }
 
     // Tüm sorular gönderildikten sonra testi sıfırla
@@ -119,4 +129,5 @@ async function sorulariGonder(chatId) {
     bot.sendMessage(chatId, "✅ **Tüm sorular gönderildi!** Telegram üzerindeki sonuçları görebilirsiniz.");
 }
 
+// --- Botu Başlat ---
 console.log("🤖 Telegram Quiz Botu çalışıyor...");
