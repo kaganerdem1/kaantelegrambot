@@ -5,7 +5,7 @@ const fs = require('fs');
 
 // --- Render Uyku Modunu Engelleme ---
 const app = express();
-app.get('/', (req, res) => res.send('Telegram Test Botu Aktif!'));
+app.get('/', (req, res) => res.send('Telegram Quiz Botu Aktif!'));
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Web sunucusu ${PORT} portunda çalışıyor.`));
 
@@ -25,9 +25,8 @@ try {
 // --- Aktif Test Değişkenleri ---
 let aktifTest = null;
 let aktifSoruIndex = 0;
-let cevapSuresiTimer = null;
 
-// --- 1. ADIM: /sor komutu ile Üniteleri Göster ---
+// --- /sor Komutu ile Üniteleri Göster ---
 bot.onText(/\/sor/, (msg) => {
     if (msg.chat.id.toString() !== groupId.toString()) return;
 
@@ -50,7 +49,7 @@ bot.on('callback_query', async (callbackQuery) => {
     const chatId = callbackQuery.message.chat.id;
     const messageId = callbackQuery.message.message_id;
 
-    // Ünite Seçildi
+    // 1. Ünite Seçildi
     if (data.startsWith('unite_')) {
         const uniteIndex = parseInt(data.split('_')[1]);
         const uniteAdi = Object.keys(soruBankasi)[uniteIndex];
@@ -67,7 +66,7 @@ bot.on('callback_query', async (callbackQuery) => {
         });
     }
 
-    // Test Seçildi, Test Başlasın
+    // 2. Test Seçildi, Sınav Başlasın
     else if (data.startsWith('testsec_')) {
         const parts = data.split('_');
         const uniteIndex = parseInt(parts[1]);
@@ -79,89 +78,45 @@ bot.on('callback_query', async (callbackQuery) => {
         aktifTest = soruBankasi[uniteAdi][testAdi];
         aktifSoruIndex = 0;
 
-        bot.editMessageText(`✅ **${uniteAdi} - ${testAdi}** başlıyor!`, {
+        bot.editMessageText(`✅ **${uniteAdi} - ${testAdi}** başlıyor! Sorular arka arkaya geliyor...`, {
             chat_id: chatId,
             message_id: messageId
         });
 
-        soruSor(chatId);
-    }
-
-    // Şık Seçildi (Kullanıcı cevap verdi)
-    else if (data.startsWith('cevap_')) {
-        const parts = data.split('_');
-        const secilenIndex = parseInt(parts[1]);
-        const soru = aktifTest[aktifSoruIndex];
-
-        // Süreyi durdur
-        if (cevapSuresiTimer) clearTimeout(cevapSuresiTimer);
-
-        // Cevabı değerlendir ve soruyu bitir
-        soruBitir(chatId, soru, secilenIndex, callbackQuery.id);
+        sorulariGonder(chatId);
     }
 });
 
-// --- Soru Sorma Fonksiyonu ---
-async function soruSor(chatId) {
+// --- Telegram Quiz (Anket) Formatında Soru Gönderme ---
+async function sorulariGonder(chatId) {
     if (!aktifTest || aktifSoruIndex >= aktifTest.length) {
-        // Test bitti
-        bot.sendMessage(chatId, "🎉 **Test bitti!** Başka bir test için /sor yazabilirsin.");
-        aktifTest = null;
-        return;
+        return bot.sendMessage(chatId, "🎉 **Test bitti!** Başka bir test için /sor yazabilirsin.");
     }
 
-    const soru = aktifTest[aktifSoruIndex];
-    const butonlar = soru.options.map((opt, index) => {
-        return [{ text: opt, callback_data: `cevap_${index}` }];
-    });
+    // Testteki her soru için Telegram Anketi oluştur
+    for (let i = 0; i < aktifTest.length; i++) {
+        const soru = aktifTest[i];
 
-    const mesaj = await bot.sendMessage(chatId, `❓ **Soru ${aktifSoruIndex + 1}/${aktifTest.length}**\n\n${soru.question}\n\n⏱️ *60 saniye içinde cevapla!*`, {
-        parse_mode: 'Markdown',
-        reply_markup: { inline_keyboard: butonlar }
-    });
+        // Telegram anket formatına çeviriyoruz
+        await bot.sendPoll(chatId, 
+            `Soru ${i + 1}: ${soru.question}`, // Soru başlığı
+            soru.options,                      // Şıklar (A, B, C, D)
+            {
+                type: 'quiz',                  // Tip: Quiz (Sınav) - En önemlisi bu!
+                correct_option_id: soru.correct, // Doğru cevabın indeksi (0 = A, 1 = B)
+                is_anonymous: false,           // Kimin ne seçtiği görünsün (avatar için)
+                explanation: `Doğru cevap: ${soru.options[soru.correct]}` // Açıklama (opsiyonel)
+            }
+        );
 
-    // 60 Saniye Zamanlayıcı Başlat
-    cevapSuresiTimer = setTimeout(() => {
-        // Süre bitince cevap verilmedi, soruyu bitir (secilenIndex -1 = boş)
-        soruBitir(chatId, soru, -1, null);
-    }, 60000); // 60000 ms = 60 saniye
-}
-
-// --- Soru Bittiğinde (Doğru Cevabı Göster ve Sonraki Soruya Geç) ---
-async function soruBitir(chatId, soru, secilenIndex, callbackId) {
-    const dogruIndex = soru.correct;
-
-    // Eğer buton tıklandıysa "Kutucuk işaretlensin" efekti için butonları düzenle
-    if (callbackId) {
-        if (secilenIndex === dogruIndex) {
-            bot.answerCallbackQuery(callbackId, { text: "✅ Doğru!", show_alert: false });
-        } else {
-            bot.answerCallbackQuery(callbackId, { text: "❌ Yanlış!", show_alert: false });
-        }
+        // Sorular arasında 2 saniye bekle (Telegram spam koruması)
+        await new Promise(resolve => setTimeout(resolve, 2000));
     }
 
-    // Butonları güncelle (Yeşil İşaret)
-    const yeniButonlar = soru.options.map((opt, index) => {
-        if (index === dogruIndex) {
-            return [{ text: `✅ ${opt}`, callback_data: 'bitti' }]; // Doğru cevap yeşil tikli
-        } else if (index === secilenIndex) {
-            return [{ text: `❌ ${opt}`, callback_data: 'bitti' }]; // Yanlış seçilen kırmızı çarpılı
-        } else {
-            return [{ text: opt, callback_data: 'bitti' }];
-        }
-    });
-
-    await bot.sendMessage(chatId, `🔔 **Soru ${aktifSoruIndex + 1} Bitti!**\nDoğru Cevap: **${soru.options[dogruIndex]}**`, {
-        reply_markup: { inline_keyboard: yeniButonlar }
-    });
-
-    // Sonraki Soruya Geç
-    aktifSoruIndex++;
-    
-    // Kısa bir süre bekle, sonra sonraki soruyu sor
-    setTimeout(() => {
-        soruSor(chatId);
-    }, 2000); // 2 saniye bekle
+    // Tüm sorular gönderildikten sonra testi sıfırla
+    aktifTest = null;
+    aktifSoruIndex = 0;
+    bot.sendMessage(chatId, "✅ **Tüm sorular gönderildi!** Telegram üzerindeki sonuçları görebilirsiniz.");
 }
 
-console.log("🤖 Telegram Test Botu çalışıyor...");
+console.log("🤖 Telegram Quiz Botu çalışıyor...");
