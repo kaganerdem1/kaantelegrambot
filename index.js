@@ -1,4 +1,4 @@
-// index.js - Sıfırdan Yazılmış Telegram Quiz Botu
+// index.js - Telegram Quiz Botu (Anket Formatında, 20 Saniye Süreli)
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
@@ -15,25 +15,24 @@ const token = process.env.TELEGRAM_TOKEN;
 const groupId = process.env.GROUP_ID;
 const bot = new TelegramBot(token, { polling: true });
 
-// --- Soru Bankasını Yükle ---
+// --- Soruları Yükle ---
 let soruBankasi = {};
 try {
     soruBankasi = JSON.parse(fs.readFileSync('questions.json', 'utf8'));
     console.log("✅ Soru bankası başarıyla yüklendi.");
 } catch (err) {
-    console.log("❌ Hata: questions.json bulunamadı veya JSON formatı bozuk!");
+    console.log("❌ Hata: questions.json bulunamadı veya formatı bozuk!");
 }
 
-// --- Test Durumunu Takip Etmek İçin ---
+// --- Aktif Test Değişkenleri ---
 let aktifTest = null;
-let aktifSoruIndex = 0;
 
-// --- /sor Komutu: Üniteleri Listele ---
+// --- /sor Komutu ile Üniteleri Göster ---
 bot.onText(/\/sor/, (msg) => {
     if (msg.chat.id.toString() !== groupId.toString()) return;
 
     const uniteler = Object.keys(soruBankasi);
-    if (uniteler.length === 0) return bot.sendMessage(groupId, "❌ Soru bankası boş.");
+    if (uniteler.length === 0) return bot.sendMessage(groupId, "❌ Soru bankası boş veya yüklenemedi.");
 
     const butonlar = uniteler.map((unite, index) => {
         return [{ text: unite, callback_data: `unite_${index}` }];
@@ -45,7 +44,7 @@ bot.onText(/\/sor/, (msg) => {
     });
 });
 
-// --- Buton Tıklamalarını Dinle ---
+// --- Buton Tıklamalarını Yakala ---
 bot.on('callback_query', async (callbackQuery) => {
     const data = callbackQuery.data;
     const chatId = callbackQuery.message.chat.id;
@@ -78,60 +77,46 @@ bot.on('callback_query', async (callbackQuery) => {
         const testAdi = Object.keys(soruBankasi[uniteAdi])[testIndex];
         
         aktifTest = soruBankasi[uniteAdi][testAdi];
-        aktifSoruIndex = 0;
 
-        bot.editMessageText(`✅ **${uniteAdi} - ${testAdi}** başlıyor! Sorular tam metin olarak geliyor...`, {
+        bot.editMessageText(`✅ **${uniteAdi} - ${testAdi}** başlıyor! Sorular 20 saniye süreyle anket olarak geliyor...`, {
             chat_id: chatId,
             message_id: messageId
         });
 
         sorulariGonder(chatId);
     }
-
-    // 3. Cevap Şıkkına Tıklandığında
-    else if (data.startsWith('cevap_')) {
-        const secilenIndex = parseInt(data.split('_')[1]);
-        const soru = aktifTest[aktifSoruIndex];
-
-        if (secilenIndex === soru.correct) {
-            await bot.answerCallbackQuery(callbackQuery.id, {
-                text: "✅ Doğru!",
-                show_alert: true
-            });
-        } else {
-            await bot.answerCallbackQuery(callbackQuery.id, {
-                text: `❌ Yanlış. Doğru cevap: ${soru.options[soru.correct]}`,
-                show_alert: true
-            });
-        }
-    }
 });
 
-// --- Soruları Gönderme Fonksiyonu ---
+// --- Quiz (Anket) Formatında Soruları Gönder ---
 async function sorulariGonder(chatId) {
-    if (!aktifTest || aktifSoruIndex >= aktifTest.length) {
-        bot.sendMessage(chatId, "🎉 **Test bitti!** Başka bir test için /sor yazabilirsin.");
-        return;
-    }
+    if (!aktifTest || aktifTest.length === 0) return;
 
     for (let i = 0; i < aktifTest.length; i++) {
         const soru = aktifTest[i];
-        aktifSoruIndex = i;
-
-        // Şıkları butonlara çevir
-        const options = soru.options.map((opt, index) => {
-            return [{ text: opt, callback_data: `cevap_${index}` }];
-        });
+        
+        // 🚨 TELEGRAM SINIRI 300 KARAKTERDİR. 
+        // Soruyu kısaltmıyoruz, sadece 295 karakteri geçerse sonunu kesiyoruz.
+        let soruMetni = soru.question;
+        if (soruMetni.length > 295) {
+            soruMetni = soruMetni.substring(0, 292) + "...";
+        }
 
         try {
-            // Soruyu TAM METİN olarak gönder (Kısıtlama yok!)
-            await bot.sendMessage(chatId, `❓ **Soru ${i + 1}**\n\n${soru.question}`, {
-                parse_mode: 'Markdown',
-                reply_markup: { inline_keyboard: options }
-            });
+            // Telegram'ın Kendi Quiz (Anket) formatı
+            await bot.sendPoll(chatId, 
+                soruMetni, 
+                soru.options, 
+                {
+                    type: 'quiz',
+                    correct_option_id: soru.correct,
+                    is_anonymous: false, // Avatarların görünmesi için
+                    open_period: 20,     // 20 saniye süre
+                    explanation: `Doğru cevap: ${soru.options[soru.correct]}`
+                }
+            );
 
-            // Sonraki soruya geçmeden 60 saniye bekle
-            await new Promise(resolve => setTimeout(resolve, 60000)); 
+            // Bir sonraki soruya geçmeden önce 22 saniye bekle (20 sn oylama + 2 sn sonuç görme)
+            await new Promise(resolve => setTimeout(resolve, 22000)); 
             
         } catch (error) {
             console.error(`Soru ${i + 1} gönderilirken hata oluştu:`, error.message);
@@ -139,9 +124,7 @@ async function sorulariGonder(chatId) {
         }
     }
 
-    // Test bittiğinde sıfırla
     aktifTest = null;
-    aktifSoruIndex = 0;
     bot.sendMessage(chatId, "✅ **Tüm sorular gönderildi!** Telegram üzerindeki sonuçları görebilirsiniz.");
 }
 
