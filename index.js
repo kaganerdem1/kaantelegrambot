@@ -1,4 +1,4 @@
-// index.js - Telegram Quiz Botu (Uzun Metin Destekli, Quiz Formatında)
+// index.js - Telegram Quiz Botu (Tam Metin + Quiz Formatı)
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
@@ -87,46 +87,26 @@ bot.on('callback_query', async (callbackQuery) => {
     }
 });
 
-// --- Soruları Gönderme Fonksiyonu ---
+// --- Soruları Gönderme Fonksiyonu (Tam Metin + Quiz) ---
 async function sorulariGonder(chatId) {
     if (!aktifTest || aktifTest.length === 0) return;
 
     for (let i = 0; i < aktifTest.length; i++) {
         const soru = aktifTest[i];
-        
-        // Telegram Quiz sınırı 300 karakterdir.
-        // Eğer soru 250 karakterden uzunsa, ikiye böleceğiz.
-        let uzunSoru = soru.question;
-        let quizSorusu = "Yukarıdaki metne göre doğru cevap hangisidir?";
-        
-        if (uzunSoru.length > 250) {
-            // Soruyu son 150 karakterden (veya son cümleden) bölmeye çalışalım
-            const parcalar = uzunSoru.split(". ");
-            if (parcalar.length > 1) {
-                // Son cümleyi quiz sorusu yapalım
-                quizSorusu = parcalar.pop() + "?";
-                uzunSoru = parcalar.join(". ") + ".";
-            } else {
-                quizSorusu = "Soruyu dikkatlice okuyup cevaplayınız.";
-            }
-        }
 
         try {
-            // 1. Adım: Uzun metni normal mesaj olarak gönder (Kısıtlama yok)
-            if (uzunSoru.length > 250) {
-                await bot.sendMessage(chatId, `📝 **Soru ${i + 1}**\n\n${uzunSoru}`, {
-                    parse_mode: 'Markdown'
-                });
-                // Mesajların birbirine karışmaması için 1 saniye bekle
-                await new Promise(resolve => setTimeout(resolve, 1000));
-            } else {
-                // Eğer soru kısaysa direkt quiz olarak gönder
-                quizSorusu = uzunSoru;
-            }
+            // ADIM 1: Sorunun TAMAMINI normal mesaj olarak gönder. (Karakter sınırı yok)
+            await bot.sendMessage(chatId, `📝 **Soru ${i + 1}**\n\n${soru.question}`, {
+                parse_mode: 'Markdown'
+            });
 
-            // 2. Adım: Quiz (Anket) kısmını gönder (Görseldeki gibi)
+            // Mesajların birbirine girmemesi için yarım saniye bekle
+            await new Promise(resolve => setTimeout(resolve, 800));
+
+            // ADIM 2: Hemen altına Quiz'i (Anketi) başlat. (Görseldeki gibi)
+            // Soru metni kısmına kısa bir yönlendirme yazıyoruz ki 300 karakter sınırına takılmasın.
             await bot.sendPoll(chatId, 
-                quizSorusu, 
+                `Soru ${i + 1} için doğru cevap hangisidir?`, 
                 soru.options, 
                 {
                     type: 'quiz',
@@ -137,7 +117,7 @@ async function sorulariGonder(chatId) {
                 }
             );
 
-            // Bir sonraki soruya geçmeden önce 22 saniye bekle
+            // Bir sonraki soruya geçmeden önce 22 saniye bekle (20 sn oylama + 2 sn sonuçları görme)
             await new Promise(resolve => setTimeout(resolve, 22000)); 
             
         } catch (error) {
