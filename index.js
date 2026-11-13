@@ -1,4 +1,4 @@
-// index.js - Telegram Quiz Botu (Anket Formatında, 20 Saniye Süreli)
+// index.js - Telegram Quiz Botu (Uzun Metin Destekli, Quiz Formatında)
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const express = require('express');
@@ -78,7 +78,7 @@ bot.on('callback_query', async (callbackQuery) => {
         
         aktifTest = soruBankasi[uniteAdi][testAdi];
 
-        bot.editMessageText(`✅ **${uniteAdi} - ${testAdi}** başlıyor! Sorular 20 saniye süreyle anket olarak geliyor...`, {
+        bot.editMessageText(`✅ **${uniteAdi} - ${testAdi}** başlıyor! Sorular 20 saniye süreyle geliyor...`, {
             chat_id: chatId,
             message_id: messageId
         });
@@ -87,24 +87,46 @@ bot.on('callback_query', async (callbackQuery) => {
     }
 });
 
-// --- Quiz (Anket) Formatında Soruları Gönder ---
+// --- Soruları Gönderme Fonksiyonu ---
 async function sorulariGonder(chatId) {
     if (!aktifTest || aktifTest.length === 0) return;
 
     for (let i = 0; i < aktifTest.length; i++) {
         const soru = aktifTest[i];
         
-        // 🚨 TELEGRAM SINIRI 300 KARAKTERDİR. 
-        // Soruyu kısaltmıyoruz, sadece 295 karakteri geçerse sonunu kesiyoruz.
-        let soruMetni = soru.question;
-        if (soruMetni.length > 295) {
-            soruMetni = soruMetni.substring(0, 292) + "...";
+        // Telegram Quiz sınırı 300 karakterdir.
+        // Eğer soru 250 karakterden uzunsa, ikiye böleceğiz.
+        let uzunSoru = soru.question;
+        let quizSorusu = "Yukarıdaki metne göre doğru cevap hangisidir?";
+        
+        if (uzunSoru.length > 250) {
+            // Soruyu son 150 karakterden (veya son cümleden) bölmeye çalışalım
+            const parcalar = uzunSoru.split(". ");
+            if (parcalar.length > 1) {
+                // Son cümleyi quiz sorusu yapalım
+                quizSorusu = parcalar.pop() + "?";
+                uzunSoru = parcalar.join(". ") + ".";
+            } else {
+                quizSorusu = "Soruyu dikkatlice okuyup cevaplayınız.";
+            }
         }
 
         try {
-            // Telegram'ın Kendi Quiz (Anket) formatı
+            // 1. Adım: Uzun metni normal mesaj olarak gönder (Kısıtlama yok)
+            if (uzunSoru.length > 250) {
+                await bot.sendMessage(chatId, `📝 **Soru ${i + 1}**\n\n${uzunSoru}`, {
+                    parse_mode: 'Markdown'
+                });
+                // Mesajların birbirine karışmaması için 1 saniye bekle
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            } else {
+                // Eğer soru kısaysa direkt quiz olarak gönder
+                quizSorusu = uzunSoru;
+            }
+
+            // 2. Adım: Quiz (Anket) kısmını gönder (Görseldeki gibi)
             await bot.sendPoll(chatId, 
-                soruMetni, 
+                quizSorusu, 
                 soru.options, 
                 {
                     type: 'quiz',
@@ -115,7 +137,7 @@ async function sorulariGonder(chatId) {
                 }
             );
 
-            // Bir sonraki soruya geçmeden önce 22 saniye bekle (20 sn oylama + 2 sn sonuç görme)
+            // Bir sonraki soruya geçmeden önce 22 saniye bekle
             await new Promise(resolve => setTimeout(resolve, 22000)); 
             
         } catch (error) {
